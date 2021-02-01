@@ -2,9 +2,14 @@
 
 #include <proto/exec.h>
 #include <proto/expansion.h>
+#include <proto/dos.h>
 
 #include <exec/libraries.h>
 #include <libraries/expansion.h>
+#include <libraries/expansionbase.h>
+#include <dos/dos.h>
+#include <dos/dosextens.h>
+#include <string.h>
 
 #include "compiler.h"
 #include "debug.h"
@@ -14,6 +19,9 @@
 static const char execName[] = "romdisk.device";
 
 extern struct DiagArea myDiagArea;
+
+struct DosLibrary *DOSBase;
+struct ExpansionBase* ExpansionBase;
 
 static ULONG *create_param_pkt(struct DevBase *base, ULONG *size)
 {
@@ -51,12 +59,108 @@ static ULONG *create_param_pkt(struct DevBase *base, ULONG *size)
   return paramPkt;
 }
 
+// see ~/Downloads/Amiga/os-source/v40_src/kickstart/expansion/disks.asm
+BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struct DeviceNode *deviceNode)
+{
+  const BYTE MAXDEVICENAME	= 32;
+  BOOL ok = FALSE;
+  // http://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node00FA.html#line45
+  DOSBase = (struct DosLibrary *)(OpenLibrary("dos.library", 0));
+  if(DOSBase != NULL) {
+    D(("open dos lib ok=%d\n", DOSBase));
+    Forbid();
+    // see http://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node0078.html
+    struct DosInfo *dosinfo = (struct DosInfo*)BADDR(DOSBase->dl_Root->rn_Info);
+    //struct DevInfo *di_head = ((struct DevInfo*)BADDR(dosinfo->di_DevInfo));
+    deviceNode->dn_Next = dosinfo->di_DevInfo; // link current head as successor (both BPTR)
+    dosinfo->di_DevInfo = MKBADDR(deviceNode); // insert node as new list head (is BPTR)
+    Permit();
+
+    if(flags & ADNB_STARTPROC) {
+      D(("removing STARTPROC\n"));
+      char devNameWithColon[MAXDEVICENAME + 1 + 1]; // ':' will be added
+      char* name = (char*)BADDR(deviceNode->dn_Name);
+      BYTE namelen = *(name++);
+      BYTE namelen2 = strlen(name);
+      namelen = (namelen < namelen2) ? namelen : namelen2;
+      if(namelen <= MAXDEVICENAME) {
+        strncpy(devNameWithColon, name, namelen);
+        devNameWithColon[namelen] = ':';
+        devNameWithColon[namelen+1] = 0;
+        FreeDeviceProc(GetDeviceProc(devNameWithColon, 0));
+        ok = TRUE;
+        D(("FreeDeviceProc\n"));
+      }
+      else {
+        D(("error: device name length too long=%d\n", namelen));
+      }
+    }
+    else {
+      ok = TRUE;
+    }
+
+    CloseLibrary((struct Library *)DOSBase);
+  }
+  else {
+    D(("open dos lib failed\n"));
+  }
+
+  return ok;
+}
+
+BOOL AddBootNodeV34(struct DevBase *base, BYTE boot_prio, BYTE flags, struct DeviceNode *deviceNode, struct ConfigDev *configDev) {
+  /*
+      move.l	a6,-(sp)		save expansionbase again
+      movea.l	hd_SysLib(a5),a6
+      moveq.l	#BootNode_SIZEOF,d0
+      bsr	GetPubMem		get bootnode memory
+      tst.l	d0
+      beq.s	10$			didn't get it
+
+      movea.l	d0,a1
+      move.b	#NT_BOOTNODE,LN_TYPE(a1)
+      move.b	d3,LN_PRI(a1)		set up boot priority
+      move.l	hd_ConfigDev(a5),LN_NAME(a1)
+      move.l	a4,bn_DeviceNode(a1)
+      move.l	(sp),a0			get back expansionbase
+      lea.l	eb_MountList(a0),a0
+      ; preserves all regs
+      jsr	_LVOForbid(a6)		gotta Forbid() around this
+      jsr	_LVOEnqueue(a6)		add our bootnode to the list
+      jsr	_LVOPermit(a6)		gotta Permit() now
+  */
+
+  BOOL ok = FALSE;
+
+  ok = enterDosNode(base, boot_prio, flags, deviceNode);
+  if(!ok) {
+    D(("enterDosNode() failed, trying to use Enqueue()\n"));
+    // http://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node00FA.html#line45
+    // http://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node0091.html
+    struct BootNode *bn = (struct BootNode *)AllocMem(sizeof(*bn), 0);
+    if(bn) {
+      bn->bn_Node.ln_Type = NT_BOOTNODE; 
+      bn->bn_Node.ln_Pri = boot_prio;
+      bn->bn_Node.ln_Name = (char *)configDev; 
+      bn->bn_Flags = 0;
+      bn->bn_DeviceNode = deviceNode; // APTR
+
+      Forbid();
+      Enqueue(&ExpansionBase->MountList, (struct Node *)bn); // http://www.theflatnet.de/pub/cbm/amiga/AmigaDevDocs/exec.html#enqueue()
+      Permit();
+      ok = TRUE;
+      D(("Enqueue() in Mountlist\n"));
+    }
+  }
+
+  return ok;
+}
+
 BOOL boot_init(struct DevBase *base)
 {
   BOOL ok = FALSE;
-  struct Library *ExpansionBase;
 
-  ExpansionBase = (struct Library *)OpenLibrary("expansion.library", 36);
+  ExpansionBase = (struct ExpansionBase *)OpenLibrary("expansion.library", 34);
   if(ExpansionBase != NULL) {
     struct ConfigDev *cd = AllocConfigDev();
     D(("got expansion. config dev=%08lx\n", cd));
@@ -98,13 +202,19 @@ BOOL boot_init(struct DevBase *base)
           struct DiskHeader *hdr = base->diskHeader;
           BYTE boot_prio = (BYTE)hdr->boot_prio;
 
-          ok = AddBootNode( boot_prio, ADNF_STARTPROC, dn, cd );
-          D(("add boot node=%d\n", ok));
+          if(((struct Library*)ExpansionBase)->lib_Version >= 36) {
+              ok = AddBootNode( boot_prio, ADNF_STARTPROC, dn, cd );
+              D(("add boot node(v36+)=%d\n", ok));
+          }
+          else {
+              ok = AddBootNodeV34( base, boot_prio, ADNF_STARTPROC, dn, cd );
+              D(("add boot node=%d\n", ok));
+          }
         }
         FreeMem(paramPkt, paramSize);
       }
     }
-    CloseLibrary(ExpansionBase);
+    CloseLibrary((struct Library*)ExpansionBase);
   }
   return ok;
 }
