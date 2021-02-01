@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "amiga",
+            "request": "launch",
+            "preLaunchTask": "compile",
+            "name": "Amiga 500",
+            "config": "A500",
+            "program": "${workspaceFolder}/a.mingw",
+            "kickstart": "/Users/michael/Downloads/Amiga/Software/Kickstart/amiga-kickroms/Kickstart v1.3 rev 34.5 (1987)(Commodore)(A500-A1000-A2000-CDTV)[!].rom",
+            "internalConsoleOptions": "openOnSessionStart"
+        },
+        {
+            "type": "amiga",
+            "request": "launch",
+            "preLaunchTask": "compile",
+            "name": "Amiga 1200",
+            "config": "A1200",
+            "program": "${workspaceFolder}/a.mingw",
+            "kickstart": "/Users/michael/Downloads/Amiga/Software/Kickstart/amiga-kickroms/Kickstart v3.1 rev 40.68 (1993)(Commodore)(A1200)[!].rom",
+            "internalConsoleOptions": "openOnSessionStart"
+        },
+        {
+            "type": "amiga",
+            "request": "launch",
+            "preLaunchTask": "compile",
+            "name": "Amiga 500 Kick 3.1",
+            "config": "A500",
+            "program": "${workspaceFolder}/a.mingw",
+            "kickstart": "/Users/michael/Downloads/Amiga/Software/Kickstart/amiga-kickroms/Kickstart v3.1 rev 40.63 (1993)(Commodore)(A500-A600-A2000)[!].rom",
+            "internalConsoleOptions": "openOnSessionStart"
+        }
+    ]
+}

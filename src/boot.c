@@ -21,7 +21,9 @@ static const char execName[] = "romdisk.device";
 extern struct DiagArea myDiagArea;
 
 struct DosLibrary *DOSBase;
-struct ExpansionBase* ExpansionBase;
+struct ExpansionBase *ExpansionBase;
+//extern struct Library *DOSBase;
+//extern struct Library *ExpansionBase;
 
 static ULONG *create_param_pkt(struct DevBase *base, ULONG *size)
 {
@@ -70,7 +72,7 @@ BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struct Devic
     D(("open dos lib ok=%d\n", DOSBase));
     Forbid();
     // see http://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node0078.html
-    struct DosInfo *dosinfo = (struct DosInfo*)BADDR(DOSBase->dl_Root->rn_Info);
+    struct DosInfo *dosinfo = (struct DosInfo*)BADDR(((struct DosLibrary *)DOSBase)->dl_Root->rn_Info);
     //struct DevInfo *di_head = ((struct DevInfo*)BADDR(dosinfo->di_DevInfo));
     deviceNode->dn_Next = dosinfo->di_DevInfo; // link current head as successor (both BPTR)
     dosinfo->di_DevInfo = MKBADDR(deviceNode); // insert node as new list head (is BPTR)
@@ -99,7 +101,7 @@ BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struct Devic
       ok = TRUE;
     }
 
-    CloseLibrary((struct Library *)DOSBase);
+    CloseLibrary((struct Library*)DOSBase);
   }
   else {
     D(("open dos lib failed\n"));
@@ -146,7 +148,7 @@ BOOL AddBootNodeV34(struct DevBase *base, BYTE boot_prio, BYTE flags, struct Dev
       bn->bn_DeviceNode = deviceNode; // APTR
 
       Forbid();
-      Enqueue(&ExpansionBase->MountList, (struct Node *)bn); // http://www.theflatnet.de/pub/cbm/amiga/AmigaDevDocs/exec.html#enqueue()
+      Enqueue(&((struct ExpansionBase*)ExpansionBase)->MountList, (struct Node *)bn); // http://www.theflatnet.de/pub/cbm/amiga/AmigaDevDocs/exec.html#enqueue()
       Permit();
       ok = TRUE;
       D(("Enqueue() in Mountlist\n"));
@@ -159,8 +161,10 @@ BOOL AddBootNodeV34(struct DevBase *base, BYTE boot_prio, BYTE flags, struct Dev
 BOOL boot_init(struct DevBase *base)
 {
   BOOL ok = FALSE;
+  D(("boot_init, base->sysBase=%08lx\n", base->sysBase)); // used by Amiga OpenLibrary macro
 
   ExpansionBase = (struct ExpansionBase *)OpenLibrary("expansion.library", 34);
+  D(("ExpansionBase=%08lx\n", ExpansionBase));
   if(ExpansionBase != NULL) {
     struct ConfigDev *cd = AllocConfigDev();
     D(("got expansion. config dev=%08lx\n", cd));

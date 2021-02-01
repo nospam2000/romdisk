@@ -39,14 +39,20 @@ CDEFINES+=-DMYDEV_WORKER=$(QUOTE)romdisk$(QUOTE)
 # toolchain dir
 # uses default dir of https://github.com/cahirwpz/amigaos-cross-toolchain
 #TC_DIR=/opt/m68k-amigaos
-TC_DIR=$(VBCC)/targets/m68k-amigaos
+#TC_DIR=$(VBCC)/targets/m68k-amigaos
+
+INC_DIRS = -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i -I$(VBCC)/targets/m68k-amigaos/include
+LIB_DIRS = -L$(VBCC)/NDK_3.9/Include/linker_libs -I$(VBCC)/targets/m68k-amigaos/lib
+#INC_DIRS = -I$(VBCC)/targets/m68k-amigaos/include -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i
+#LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_3.9/Include/linker_libs
 
 # cross compiler/assembler setup
-CC=vc -E -k
+CC=vc +vc.config2 -E -k $(INC_DIRS) $(LIB_DIRS)
+#CC=vc +vc.empty_config -E -k $(INC_DIRS) $(LIB_DIRS)
 CFLAGS=-c99 -g -sc $(CDEFINES) $(OPTFLAGS)
 LDFLAGS=-g -nostdlib -lvcs -lamiga
 AS=vasmm68k_mot
-ASFLAGS=-quiet -Fhunk -I$(TC_DIR)/include -m68000
+ASFLAGS=-quiet -Fhunk $(INC_DIRS) -m68000
 
 SRCS=device.c disk.c mydev.c worker.c unpack.c
 ASRCS=rnc.s inflate.s lz4.s
