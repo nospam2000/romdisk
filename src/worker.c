@@ -48,11 +48,13 @@ static SAVEDS ASM void worker_main(void)
 
   /* create worker port */
   port = CreateMsgPort();
+  D(("Port: %08lx\n", port));
 
   /* call user init */
   if(port != NULL) {
     if(!mydev_worker_init(base)) {
       /* user aborted worker */
+      D(("mydev_worker_init failed\n"));
       DeleteMsgPort(port);
       port = NULL;
     }

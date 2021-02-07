@@ -1,0 +1,14 @@
+-cc=vbccm68k  -warn=-1 -dontwarn=307 -dontwarn=65 -hunkdebug -sd %s -o= %s %s -O=%ld
+-ccv=vbccm68k -warn=-1 -dontwarn=307 -dontwarn=65 -hunkdebug -sd %s -o= %s %s -O=%ld
+-as=vasmm68k_mot  -Fhunk -nowarn=62 %s -o %s
+-asv=vasmm68k_mot -Fhunk -nowarn=62 %s -o %s
+-rm=rm -f %s
+-rmv=rm   %s
+-ld=vlink  -bamigahunk -x    -Bstatic -Cvbcc -nostdlib -mrel %s %s -o %s
+-l2=vlink  -bamigahunk -x    -Bstatic -Cvbcc -nostdlib -mrel %s %s -o %s
+-ldv=vlink -bamigahunk -t -x -Bstatic -Cvbcc -nostdlib -mrel %s %s -o %s
+-l2v=vlink -bamigahunk -t -x -Bstatic -Cvbcc -nostdlib -mrel %s %s -o %s
+-ldnodb=-s -Rshort
+-ul=-l%s
+-cf=-F%s
+-ml=1000

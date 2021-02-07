@@ -20,11 +20,6 @@ static const char execName[] = "romdisk.device";
 
 extern struct DiagArea myDiagArea;
 
-struct DosLibrary *DOSBase;
-struct ExpansionBase *ExpansionBase;
-//extern struct Library *DOSBase;
-//extern struct Library *ExpansionBase;
-
 static ULONG *create_param_pkt(struct DevBase *base, ULONG *size)
 {
   *size = 21 * 4;
@@ -62,12 +57,12 @@ static ULONG *create_param_pkt(struct DevBase *base, ULONG *size)
 }
 
 // see ~/Downloads/Amiga/os-source/v40_src/kickstart/expansion/disks.asm
-BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struct DeviceNode *deviceNode)
+static BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struct DeviceNode *deviceNode)
 {
   const BYTE MAXDEVICENAME	= 32;
   BOOL ok = FALSE;
   // http://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node00FA.html#line45
-  DOSBase = (struct DosLibrary *)(OpenLibrary("dos.library", 0));
+  struct DosLibrary *DOSBase = (struct DosLibrary *)(OpenLibrary("dos.library", 0));
   if(DOSBase != NULL) {
     D(("open dos lib ok=%d\n", DOSBase));
     Forbid();
@@ -110,7 +105,7 @@ BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struct Devic
   return ok;
 }
 
-BOOL AddBootNodeV34(struct DevBase *base, BYTE boot_prio, BYTE flags, struct DeviceNode *deviceNode, struct ConfigDev *configDev) {
+static BOOL AddBootNodeV34(struct DevBase *base, BYTE boot_prio, BYTE flags, struct DeviceNode *deviceNode, struct ConfigDev *configDev, struct ExpansionBase* ExpansionBase) {
   /*
       move.l	a6,-(sp)		save expansionbase again
       movea.l	hd_SysLib(a5),a6
@@ -141,14 +136,16 @@ BOOL AddBootNodeV34(struct DevBase *base, BYTE boot_prio, BYTE flags, struct Dev
     // http://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node0091.html
     struct BootNode *bn = (struct BootNode *)AllocMem(sizeof(*bn), 0);
     if(bn) {
+      bn->bn_Node.ln_Succ = NULL;
+      bn->bn_Node.ln_Pred = NULL;
       bn->bn_Node.ln_Type = NT_BOOTNODE; 
       bn->bn_Node.ln_Pri = boot_prio;
-      bn->bn_Node.ln_Name = (char *)configDev; 
+      bn->bn_Node.ln_Name = (char *)configDev;
       bn->bn_Flags = 0;
       bn->bn_DeviceNode = deviceNode; // APTR
 
       Forbid();
-      Enqueue(&((struct ExpansionBase*)ExpansionBase)->MountList, (struct Node *)bn); // http://www.theflatnet.de/pub/cbm/amiga/AmigaDevDocs/exec.html#enqueue()
+      Enqueue(&ExpansionBase->MountList, (struct Node *)bn); // http://www.theflatnet.de/pub/cbm/amiga/AmigaDevDocs/exec.html#enqueue()
       Permit();
       ok = TRUE;
       D(("Enqueue() in Mountlist\n"));
@@ -163,7 +160,7 @@ BOOL boot_init(struct DevBase *base)
   BOOL ok = FALSE;
   D(("boot_init, base->sysBase=%08lx\n", base->sysBase)); // used by Amiga OpenLibrary macro
 
-  ExpansionBase = (struct ExpansionBase *)OpenLibrary("expansion.library", 34);
+  struct ExpansionBase *ExpansionBase = (struct ExpansionBase *)OpenLibrary("expansion.library", 33); // Kick 1.2 or newer
   D(("ExpansionBase=%08lx\n", ExpansionBase));
   if(ExpansionBase != NULL) {
     struct ConfigDev *cd = AllocConfigDev();
@@ -178,9 +175,17 @@ BOOL boot_init(struct DevBase *base)
 
       /* fill faked config dev */
       cd->cd_Flags = 0;
+      cd->cd_Pad = 0;
       cd->cd_BoardAddr = (APTR)diag_base;
       cd->cd_BoardSize = 0x010000;
+      cd->cd_SlotAddr = 0;
+      cd->cd_SlotSize = 1;
       cd->cd_Driver = (APTR)base;
+      cd->cd_NextCD = NULL;
+      cd->cd_Unused[0] = 0;
+      cd->cd_Unused[1] = 0;
+      cd->cd_Unused[2] = 0;
+      cd->cd_Unused[3] = 0;
       struct ExpansionRom *rom = &cd->cd_Rom;
       rom->er_Type = ERT_ZORROII | ERTF_DIAGVALID | 1; /* size=64 KiB */
       rom->er_Flags = ERFF_NOSHUTUP;
@@ -188,6 +193,7 @@ BOOL boot_init(struct DevBase *base)
       rom->er_Manufacturer = 2011; /* hack id */
       rom->er_SerialNumber = 1;
       rom->er_InitDiagVec = (UWORD)diag_off;
+      rom->er_Reserved03 = 0;
 
       /* fake copy of diag area. the pointer is stored in er_Reserved0c..0f */
       ULONG *ptr = (ULONG *)&rom->er_Reserved0c;
@@ -211,7 +217,7 @@ BOOL boot_init(struct DevBase *base)
               D(("add boot node(v36+)=%d\n", ok));
           }
           else {
-              ok = AddBootNodeV34( base, boot_prio, ADNF_STARTPROC, dn, cd );
+              ok = AddBootNodeV34( base, boot_prio, ADNF_STARTPROC, dn, cd, ExpansionBase);
               D(("add boot node=%d\n", ok));
           }
         }
