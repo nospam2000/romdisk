@@ -1,5 +1,5 @@
--cc=vbccm68k  -warn=-1 -dontwarn=307 -dontwarn=65 -hunkdebug -sd %s -o= %s %s -O=%ld
--ccv=vbccm68k -warn=-1 -dontwarn=307 -dontwarn=65 -hunkdebug -sd %s -o= %s %s -O=%ld
+-cc=vbccm68k  -warn=-1 -dontwarn=307 -dontwarn=167 -dontwarn=65 -hunkdebug -sd %s -o= %s %s -O=%ld
+-ccv=vbccm68k -warn=-1 -dontwarn=307 -dontwarn=167 -dontwarn=65 -hunkdebug -sd %s -o= %s %s -O=%ld
 -as=vasmm68k_mot  -Fhunk -nowarn=62 %s -o %s
 -asv=vasmm68k_mot -Fhunk -nowarn=62 %s -o %s
 -rm=rm -f %s

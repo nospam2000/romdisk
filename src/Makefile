@@ -44,12 +44,24 @@ CDEFINES+=-DMYDEV_WORKER=$(QUOTE)romdisk$(QUOTE)
 # for the small data  model (-sd) the amiga.lib from VBCC needs to be used
 #INC_DIRS = -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i -I$(VBCC)/targets/m68k-amigaos/include
 #LIB_DIRS = -L$(VBCC)/NDK_3.9/Include/linker_libs -I$(VBCC)/targets/m68k-amigaos/lib
-INC_DIRS = -I$(VBCC)/targets/m68k-amigaos/include -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i
-LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_3.9/Include/linker_libs
+#INC_DIRS = -I$(VBCC)/targets/m68k-amigaos/include -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i
+#LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_3.9/Include/linker_libs
+
+#INC_DIRS = -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i -I$(VBCC)/targets/m68k-amigaos/include
+#LIB_DIRS = -L$(VBCC)/NDK_3.9/Include/linker_libs -I$(VBCC)/targets/m68k-amigaos/lib
+#INC_DIRS = -I$(VBCC)/targets/m68k-amigaos/include -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i
+#LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_3.9/Include/linker_libs
+
+#INC_DIRS = -I$(VBCC)/targets/m68k-kick13/include -I$(VBCC)/NDK_1.3/Includes1.3/include.h -I$(VBCC)/NDK_1.3/Includes1.3/include.i
+#LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_1.3/Include-Strip1.3/lib
+INC_DIRS = -I$(VBCC)/NDK_1.3/Includes1.3/include.h -I$(VBCC)/NDK_1.3/Includes1.3/include.i -I$(VBCC)/targets/m68k-kick13/include
+LIB_DIRS = -L$(VBCC)/NDK_1.3/Include-Strip1.3/lib -I$(VBCC)/targets/m68k-amigaos/lib
+
 
 # cross compiler/assembler setup
 #CC=vc +vc.config -E -k $(INC_DIRS) $(LIB_DIRS)
 CC=vc +vc.empty_config -E -k $(INC_DIRS) $(LIB_DIRS)
+#CC=vc +vc13.config -E -k $(INC_DIRS) $(LIB_DIRS)
 CFLAGS=-c99 -g -sc $(CDEFINES) $(OPTFLAGS)
 LDFLAGS=-g -nostdlib -lvcs -lamiga
 AS=vasmm68k_mot

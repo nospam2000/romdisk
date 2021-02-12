@@ -3,6 +3,8 @@
     "files.associations": {
         "libraries.h": "c",
         "exec.h": "c",
-        "expansion.h": "c"
+        "expansion.h": "c",
+        "types.h": "c",
+        "dos.h": "c"
     }
 }

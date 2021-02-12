@@ -3,9 +3,16 @@
 #include <clib/alib_protos.h>
 
 #include <exec/types.h>
+#include <exec/ports.h>
+
+#if INCLUDE_VERSION > 36
 #include <dos/dostags.h>
 #include <dos/dosextens.h>
-#include <dos/dos.h>
+#else
+#include <libraries/dosextens.h>
+#include <libraries/dos.h>
+#endif
+#include <string.h>
 
 #define NO_SYSBASE
 #include "compiler.h"
@@ -36,6 +43,163 @@ static struct InitData * worker_startup(void)
 
 #define SysBase base->sysBase
 
+
+#define ME_TASK 	0
+#define ME_STACK	1
+#define NUMENTRIES	2
+struct FakeMemEntry {
+    ULONG fme_Reqs;
+    ULONG fme_Length;
+};
+struct FakeMemList {
+    struct Node fml_Node;
+    UWORD	fml_NumEntries;
+    struct FakeMemEntry fml_ME[NUMENTRIES];
+};
+static const struct FakeMemList TaskMemTemplate = {
+    { 0 },						/* Node */
+    NUMENTRIES, 					/* num entries */
+    {							/* actual entries: */
+        { MEMF_PUBLIC | MEMF_CLEAR, sizeof( struct Task ) },    /* task */
+        { MEMF_PUBLIC | MEMF_CLEAR,	4096 }					/* stack */
+    }
+};
+static const struct FakeMemList TaskMemTemplate2 = {
+    { 0 },						/* Node */
+    1, 	   				/* num entries */
+    {							/* actual entries: */
+        { MEMF_PUBLIC | MEMF_CLEAR, sizeof( struct Task ) + 4096 },    /* task */
+    }
+};
+
+static struct Task * MyCreateTask(struct DevBase *base, void* taskUserData, const char *name, BYTE pri, const APTR initPC, ULONG stackSize)
+{
+    struct Task *newTask;
+
+    /* round the stack up to longwords... */
+    stackSize = (stackSize +3) & 0xFFFFFFFC;
+
+#if 1
+    /*
+     * This will allocate two chunks of memory: task of PUBLIC
+     * and stack of PRIVATE
+     */
+    struct FakeMemList fakememlist;
+    struct MemList *ml;
+    fakememlist = TaskMemTemplate2;
+    fakememlist.fml_ME[ME_TASK].fme_Length = ((sizeof(struct Task) + 3) & 0xFFFFFFFC) + ((stackSize + 3) & 0xFFFFFFFC) + ((strlen(name) + 1 + 3) & 0xFFFFFFFC);
+    //ml = (struct MemList *) AllocEntry( (struct MemList *)&fakememlist );
+    ml = (struct MemList *) AllocMem(((sizeof(struct FakeMemList) + 3) & 0xFFFFFFFC) + fakememlist.fml_ME[ME_TASK].fme_Length,
+      MEMF_PUBLIC | MEMF_CLEAR);
+    fakememlist.fml_NumEntries = 0;
+
+    /* NOTE ! - AllocEntry returns with bit 31 set if it fails ! */
+    if( ((ULONG)ml) & 0x80000000 ) {
+      D(("MyCreateTask: AllocEntry failed!\n"));
+    	return( NULL );
+    }
+
+    /* set the stack accounting stuff */
+    //newTask = (struct Task *) ml->ml_ME[ME_TASK].me_Addr;
+    //newTask->tc_SPLower = (BYTE*)ml->ml_ME[ME_TASK].me_Addr + ((sizeof(struct Task) + 3) & 0xFFFFFFFC);
+    ml->ml_ME[ME_TASK].me_Addr = (APTR)((BYTE*)ml + ((sizeof(struct FakeMemList) + 3) & 0xFFFFFFFC));
+    newTask = (struct Task *) ml->ml_ME[ME_TASK].me_Addr;
+    newTask->tc_SPLower = (APTR)((BYTE*)newTask + ((sizeof(struct Task) + 3) & 0xFFFFFFFC));
+#else
+    /*
+     * This will allocate two chunks of memory: task of PUBLIC
+     * and stack of PRIVATE
+     */
+    struct FakeMemList fakememlist;
+    struct MemList *ml;
+    fakememlist = TaskMemTemplate;
+    fakememlist.fml_ME[ME_STACK].fme_Length = stackSize;
+
+    ml = (struct MemList *) AllocEntry( (struct MemList *)&fakememlist );
+
+    /* NOTE ! - AllocEntry returns with bit 31 set if it fails ! */
+    if( ((ULONG)ml) & 0x80000000 ) {
+      D(("MyCreateTask: AllocEntry failed!\n"));
+    	return( NULL );
+    }
+
+    /* set the stack accounting stuff */
+    newTask = (struct Task *) ml->ml_ME[ME_TASK].me_Addr;
+
+    newTask->tc_SPLower = ml->ml_ME[ME_STACK].me_Addr;
+#endif
+    newTask->tc_SPUpper = (APTR)(((ULONG)(newTask->tc_SPLower) + ((stackSize - 2) & 0xFFFFFFFC)) & 0xFFFFFFFE);
+    newTask->tc_SPReg = newTask->tc_SPUpper;
+    char* nameInRAM = (char*)((BYTE*)newTask->tc_SPUpper + ((stackSize + 3) & 0xFFFFFFFC));
+    strcpy(nameInRAM, name);
+
+    /* misc task data structures */
+    newTask->tc_Node.ln_Type = NT_TASK;
+    newTask->tc_Node.ln_Pri = pri;
+    newTask->tc_Node.ln_Name = nameInRAM;
+    newTask->tc_UserData = taskUserData;
+
+    /* add it to the tasks memory list */
+    NewList( &newTask->tc_MemEntry );
+    AddHead( &newTask->tc_MemEntry, (struct Node*)ml );
+
+    /* add the task to the system -- use the default final PC */
+    AddTask( newTask, initPC, 0 );
+    return( newTask );
+}
+
+// not available in 1.3
+static struct MsgPort* MyCreateMsgPort(struct DevBase *base) {
+  struct MsgPort *mp = NULL;
+
+#if 1
+  //D(("CreateMsgPort: before AllocSignal\n"));
+  BYTE signal = AllocSignal(-1);
+  if(signal == -1) {
+    D(("MyCreateMsgPort: NO SIGNAL!\n"));
+  }
+  else
+  {
+    //D(("CreateMsgPort: before AllocMem\n"));
+    mp = (struct MsgPort *)AllocMem(sizeof(*mp), MEMF_PUBLIC|MEMF_CLEAR);
+    if(!mp) {
+      D(("MyCreateMsgPort: NO MEMORY!\n"));
+      FreeSignal(signal);
+    }
+    else {
+      mp->mp_SigBit = signal;
+      mp->mp_Node.ln_Type = NT_MSGPORT;
+      mp->mp_Flags = PA_SIGNAL;
+      //mp->mp_SigTask = ((struct ExecBase*)base->sysBase)->ThisTask;
+      mp->mp_SigTask = FindTask(NULL);
+      NewList(&mp->mp_MsgList);
+      mp->mp_MsgList.lh_Type = NT_MESSAGE;
+    }
+  }
+  #else
+    D(("MyCreateMsgPort: before CreateMsgPort\n"));
+    mp = CreateMsgPort();
+    D(("MyCreateMsgPort: after CreateMsgPort\n"));
+  #endif
+
+  return mp;
+}
+
+// not available in 1.3
+static void MyDeleteMsgPort(struct DevBase *base, struct MsgPort* mp) {
+#if 1
+  D(("MyDeleteMsgPort: before FreeSignal\n"));
+  // TODO: check what the original function does (e.g. replying all messages in port?)
+  FreeSignal(mp->mp_SigBit);
+  FreeMem(mp, sizeof(*mp));
+#else
+    D(("MyDeleteMsgPort: before DeleteMsgPort\n"));
+    mp = DeleteMsgPort(mp);
+    D(("MyDeleteMsgPort: after DeleteMsgPort\n"));
+#endif
+}
+
+
 static SAVEDS ASM void worker_main(void)
 {
   struct IOStdReq *ior;
@@ -44,10 +208,10 @@ static SAVEDS ASM void worker_main(void)
   /* retrieve dev base stored in user data of task */
   struct InitData *id = worker_startup();
   struct DevBase *base = id->base;
-  D(("Task: id=%08lx base=%08lx\n", id, base));
+  D(("Task: id=%08lx base=%08lx base->sysBase=%08lx\n", id, base,  base->sysBase));
 
   /* create worker port */
-  port = CreateMsgPort();
+  port = MyCreateMsgPort(base);
   D(("Port: %08lx\n", port));
 
   /* call user init */
@@ -55,10 +219,14 @@ static SAVEDS ASM void worker_main(void)
     if(!mydev_worker_init(base)) {
       /* user aborted worker */
       D(("mydev_worker_init failed\n"));
-      DeleteMsgPort(port);
+      MyDeleteMsgPort(base, port);
       port = NULL;
     }
   }
+
+
+  //Guru Information:
+  //http://www.bambi-amiga.co.uk/amigahistory/guruguide.html
 
   /* setup port or NULL and trigger signal to caller task */
   base->workerPort = port;
@@ -72,9 +240,11 @@ static SAVEDS ASM void worker_main(void)
     D(("Task: enter\n"));
     BOOL stay = TRUE;
     while (stay) {
+      D(("Task: WaitPort\n"));
       WaitPort(port);
       while (1) {
         ior = (struct IOStdReq *)GetMsg(port);
+        D(("Task: ior=%08lx\n", ior));
         if(ior == NULL) {
           break;
         }
@@ -99,7 +269,7 @@ static SAVEDS ASM void worker_main(void)
   }
 
   D(("Task: delete port\n"));
-  DeleteMsgPort(port);
+  MyDeleteMsgPort(base, port);
   base->workerPort = NULL;
 
   /* kill myself */
@@ -132,12 +302,12 @@ BOOL worker_start(struct DevBase *base)
   /* now launch worker task and inject dev base
      make sure worker_main() does not run before base is set.
   */
-  Forbid();
-  struct Task *myTask = CreateTask(WorkerTaskName, 0, (CONST APTR)worker_main, 4096);
+  //Forbid();
+  struct Task *myTask = MyCreateTask(base, &id, WorkerTaskName, 0, (const APTR)worker_main, 4096UL);
   if(myTask != NULL) {
-    myTask->tc_UserData = (APTR)&id;
+    //myTask->tc_UserData = (APTR)&id;
   }
-  Permit();
+  //Permit();
   if(myTask == NULL) {
     D(("Worker: NO TASK!\n"));
     FreeSignal(signal);
@@ -152,7 +322,7 @@ BOOL worker_start(struct DevBase *base)
 
   /* ok everything is fine. worker is ready to receive commands */
   D(("Worker: started: port=%08lx\n", base->workerPort));
-  return (base->workerPort != NULL) ? TRUE : FALSE;
+  return ((base->workerPort != NULL) ? TRUE : FALSE);
 }
 
 void worker_stop(struct DevBase *base)
@@ -163,13 +333,13 @@ void worker_stop(struct DevBase *base)
 
   if(base->workerPort != NULL) {
     /* send a message to the child process to shut down. */
-    newior.io_Message.mn_ReplyPort = CreateMsgPort();
+    newior.io_Message.mn_ReplyPort = MyCreateMsgPort(base);
     newior.io_Command = CMD_TERM;
 
     /* send term message and wait for reply */
     PutMsg(base->workerPort, &newior.io_Message);
     WaitPort(newior.io_Message.mn_ReplyPort);
-    DeleteMsgPort(newior.io_Message.mn_ReplyPort);
+    MyDeleteMsgPort(base, newior.io_Message.mn_ReplyPort);
   }
 
   D(("Worker: stopped\n"));

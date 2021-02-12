@@ -63,7 +63,7 @@ static BOOL disk_get_unpacked_data(struct DevBase *base, ULONG pack_id)
       base->curPackId = pack_id;
       return TRUE;
     } else {
-      base->curPackId = -1;
+      base->curPackId = (ULONG)-1L;
       return FALSE;
     }
   }
@@ -216,7 +216,7 @@ BOOL disk_setup(struct DevBase *base)
 
 BOOL disk_open(struct DevBase *base)
 {
-  base->curPackId = -1;
+  base->curPackId = (ULONG)-1L;
 
   /* alloc pack buffer */
   struct PackHeader *ph = base->packHeader;

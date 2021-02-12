@@ -1,7 +1,12 @@
 #include <exec/types.h>
 #include <exec/libraries.h>
 #include <exec/resident.h>
+
+#if INCLUDE_VERSION > 36
 #include <dos/dos.h>
+#else
+#include <libraries/dos.h>
+#endif
 
 #include <proto/exec.h>
 #include <proto/expansion.h>
@@ -65,13 +70,13 @@ static const struct Resident ROMTag =
 {
   RTC_MATCHWORD,
   (struct Resident *)&ROMTag,
-  (struct Resident *)&ROMTag + 1,
+  (APTR)((struct Resident *)&ROMTag + 1),
   RTF_AUTOINIT | RTF_COLDSTART,
   MYDEV_VERSION,
   NT_DEVICE,
   0, /* prio */
-  (APTR)UserLibName,
-  (APTR)UserLibVer,
+  (char *)UserLibName,
+  (char *)UserLibVer,
   (APTR)LibInitTab
 };
 
@@ -90,10 +95,10 @@ LIBFUNC static struct DevBase * DevInit(REG(a0, BPTR Segment),
   base->libBase.lib_Flags        = LIBF_CHANGED | LIBF_SUMUSED;
   base->libBase.lib_Version      = MYDEV_VERSION;
   base->libBase.lib_Revision     = MYDEV_REVISION;
-  base->libBase.lib_IdString     = (char *)UserLibVer;
+  base->libBase.lib_IdString     = (APTR)UserLibVer;
 
   base->segList = Segment;
-  base->sysBase = (APTR)sb;
+  base->sysBase = (struct Library *)sb;
 
   D(("+DevInit(%08lx, %08lx, %08lx)\n", Segment, base, sb));
   struct DevBase *result = mydev_init(base);
