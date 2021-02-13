@@ -208,7 +208,7 @@ BOOL boot_init(struct DevBase *base)
       cd->cd_BoardAddr = (APTR)diag_base;
       cd->cd_BoardSize = (APTR)0x010000;
       cd->cd_SlotAddr = 0;
-      cd->cd_SlotSize = 1;
+      cd->cd_SlotSize = 0;
       cd->cd_Driver = (APTR)base;
       cd->cd_NextCD = NULL;
       cd->cd_Unused[0] = 0;
@@ -245,11 +245,11 @@ BOOL boot_init(struct DevBase *base)
           //if(((struct Library*)ExpansionBase)->lib_Version >= 38) {
           if(0) {
               ok = AddBootNode( boot_prio, ADNF_STARTPROC, dn, cd );
-              D(("add boot node(v36+)=%d\n", ok));
+              D(("add boot node(v36+)=%ld\n", (ULONG)ok));
           }
           else {
               ok = AddBootNodeV34( base, boot_prio, ADNF_STARTPROC, dn, cd, ExpansionBase);
-              D(("add boot node=%d\n", ok));
+              D(("add boot node=%ld\n", (ULONG)ok));
           }
         }
         FreeMem(paramPkt, paramSize);
