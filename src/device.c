@@ -132,6 +132,7 @@ LIBFUNC static struct DevBase * DevOpen(REG(a1, struct IOStdReq *ior),
                                         REG(a6, struct DevBase *base))
 {
   D(("+DevOpen(%lx,%ld,%ld)\n", ior, unit, flags));
+  D(("DevOpen addr=%lx\n", &DevOpen));
   if(base == NULL) {
     return NULL;
   }

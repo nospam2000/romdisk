@@ -1,5 +1,3 @@
-#include <string.h>
-
 #include <proto/exec.h>
 #include <devices/trackdisk.h>
 

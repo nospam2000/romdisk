@@ -7,7 +7,7 @@
                 "${workspaceFolder}/src/**",
                 //"/opt/vbcc_amiga/NDK_3.9/Include/include_h",
                 "/opt/vbcc_amiga/NDK_1.3/Includes1.3/include.h",
-                "/opt/vbcc_amiga/targets/m68k-amigaos/include"
+                //"/opt/vbcc_amiga/targets/m68k-amigaos/include"
             ],
             "defines": [ "__GNUC__=8", "_NO_INLINE" ],
             //"compilerPath": "${default}",

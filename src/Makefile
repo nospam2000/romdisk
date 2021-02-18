@@ -11,6 +11,7 @@ FLAVORS=_rel _dbg _rel_td _dbg_td
 ifeq "_dbg" "$(findstring _dbg,$(FLAVOR))"
 DEBUG=1
 DEFINES+=DEBUG
+OPTFLAGS=-O0
 else
 OPTFLAGS=-O2
 endif
@@ -52,11 +53,10 @@ CDEFINES+=-DMYDEV_WORKER=$(QUOTE)romdisk$(QUOTE)
 #INC_DIRS = -I$(VBCC)/targets/m68k-amigaos/include -I$(VBCC)/NDK_3.9/Include/include_h -I$(VBCC)/NDK_3.9/Include/include_i
 #LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_3.9/Include/linker_libs
 
-#INC_DIRS = -I$(VBCC)/targets/m68k-kick13/include -I$(VBCC)/NDK_1.3/Includes1.3/include.h -I$(VBCC)/NDK_1.3/Includes1.3/include.i
-#LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_1.3/Include-Strip1.3/lib
-INC_DIRS = -I$(VBCC)/NDK_1.3/Includes1.3/include.h -I$(VBCC)/NDK_1.3/Includes1.3/include.i -I$(VBCC)/targets/m68k-kick13/include
-LIB_DIRS = -L$(VBCC)/NDK_1.3/Include-Strip1.3/lib -I$(VBCC)/targets/m68k-amigaos/lib
-
+INC_DIRS = -I$(VBCC)/targets/m68k-kick13/include -I$(VBCC)/NDK_1.3/Includes1.3/include.h -I$(VBCC)/NDK_1.3/Includes1.3/include.i
+LIB_DIRS = -I$(VBCC)/targets/m68k-amigaos/lib -L$(VBCC)/NDK_1.3/Include-Strip1.3/lib
+#INC_DIRS = -I$(VBCC)/NDK_1.3/Includes1.3/include.h -I$(VBCC)/NDK_1.3/Includes1.3/include.i -I$(VBCC)/targets/m68k-kick13/include
+#LIB_DIRS = -L$(VBCC)/NDK_1.3/Include-Strip1.3/lib -I$(VBCC)/targets/m68k-amigaos/lib
 
 # cross compiler/assembler setup
 #CC=vc +vc.config -E -k $(INC_DIRS) $(LIB_DIRS)

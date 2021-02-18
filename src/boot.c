@@ -27,7 +27,6 @@
 #define ERT_ZORROII		ERT_NEWBOARD
 #endif
 #endif
-#include <string.h>
 
 #include "compiler.h"
 #include "debug.h"
@@ -83,7 +82,7 @@ static VOID MyNewList(struct List * list) {
 // see ~/Downloads/Amiga/os-source/v40_src/kickstart/expansion/disks.asm
 static BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struct DeviceNode *deviceNode)
 {
-  // TODO: implement? this will necer succeed, because OpenDosLib alwayss fails
+  // TODO: is it worth implementing this? this will never succeed, because OpenDosLib always fails
 #if 1
   return 0;
 #else
@@ -108,7 +107,7 @@ static BOOL enterDosNode(struct DevBase *base, BYTE boot_prio, BYTE flags, struc
       char devNameWithColon[MAXDEVICENAME + 1 + 1]; // ':' will be added
       char* name = (char*)BADDR(deviceNode->dn_Name);
       BYTE namelen = *(name++);
-      BYTE namelen2 = strlen(name);
+      BYTE namelen2 = mystrlen(name);
       namelen = (namelen < namelen2) ? namelen : namelen2;
       if(namelen <= MAXDEVICENAME) {
         strncpy(devNameWithColon, name, namelen);

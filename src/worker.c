@@ -12,7 +12,6 @@
 #include <libraries/dosextens.h>
 #include <libraries/dos.h>
 #endif
-#include <string.h>
 
 #define NO_SYSBASE
 #include "compiler.h"
@@ -43,95 +42,59 @@ static struct InitData * worker_startup(void)
 
 #define SysBase base->sysBase
 
+static ULONG mystrlen(const char* str) {
+  ULONG len = 0;
+  while(str[len++]) {}  
 
-#define ME_TASK 	0
-#define ME_STACK	1
-#define NUMENTRIES	2
-struct FakeMemEntry {
-    ULONG fme_Reqs;
-    ULONG fme_Length;
-};
-struct FakeMemList {
-    struct Node fml_Node;
-    UWORD	fml_NumEntries;
-    struct FakeMemEntry fml_ME[NUMENTRIES];
-};
-static const struct FakeMemList TaskMemTemplate = {
-    { 0 },						/* Node */
-    NUMENTRIES, 					/* num entries */
-    {							/* actual entries: */
-        { MEMF_PUBLIC | MEMF_CLEAR, sizeof( struct Task ) },    /* task */
-        { MEMF_PUBLIC | MEMF_CLEAR,	4096 }					/* stack */
-    }
-};
-static const struct FakeMemList TaskMemTemplate2 = {
-    { 0 },						/* Node */
-    1, 	   				/* num entries */
-    {							/* actual entries: */
-        { MEMF_PUBLIC | MEMF_CLEAR, sizeof( struct Task ) + 4096 },    /* task */
-    }
-};
+  return len - 1;
+}
+
+static void mystrcpy(char* strdst, const char* strsrc) {
+  ULONG len = 0;
+  while(*(strdst++) = *(strsrc++)) {}
+}
 
 static struct Task * MyCreateTask(struct DevBase *base, void* taskUserData, const char *name, BYTE pri, const APTR initPC, ULONG stackSize)
 {
-    struct Task *newTask;
+    struct Task *newTask = NULL;
 
-    /* round the stack up to longwords... */
-    stackSize = (stackSize +3) & 0xFFFFFFFC;
-
-#if 1
-    /*
-     * This will allocate two chunks of memory: task of PUBLIC
-     * and stack of PRIVATE
-     */
-    struct FakeMemList fakememlist;
-    struct MemList *ml;
-    fakememlist = TaskMemTemplate2;
-    fakememlist.fml_ME[ME_TASK].fme_Length = ((sizeof(struct Task) + 3) & 0xFFFFFFFC) + ((stackSize + 3) & 0xFFFFFFFC) + ((strlen(name) + 1 + 3) & 0xFFFFFFFC);
-    //ml = (struct MemList *) AllocEntry( (struct MemList *)&fakememlist );
-    ml = (struct MemList *) AllocMem(((sizeof(struct FakeMemList) + 3) & 0xFFFFFFFC) + fakememlist.fml_ME[ME_TASK].fme_Length,
-      MEMF_PUBLIC | MEMF_CLEAR);
-    fakememlist.fml_NumEntries = 0;
-
-    /* NOTE ! - AllocEntry returns with bit 31 set if it fails ! */
-    if( ((ULONG)ml) & 0x80000000 ) {
-      D(("MyCreateTask: AllocEntry failed!\n"));
+    const UWORD numChunks = 1;
+    const ULONG mlAllocSize = sizeof(struct MemList) + sizeof(struct MemEntry) * (numChunks - 1);
+    struct MemList *ml = (struct MemList *) AllocMem(mlAllocSize, MEMF_PUBLIC | MEMF_CLEAR);
+    if(!ml) {
+      D(("MyCreateTask: AllocMem for MemList failed!\n"));
     	return( NULL );
     }
 
-    /* set the stack accounting stuff */
+    /*
+     * This will allocate one chunk of memory which contains 3 parts:
+     *  1. task structure
+     *  2. stack
+     *  3. name
+     */
+    const ULONG taskAllocSize = ((sizeof(struct Task) + 3) & 0xFFFFFFFC); // round up to next 4 bytes
+    stackSize = (stackSize + 3) & 0xFFFFFFFC;
+    const ULONG nameAllocSize = ((mystrlen(name) + 1 + 3) & 0xFFFFFFFC); // round up to next 4 bytes
+    const ULONG wholeAllocSize = taskAllocSize + stackSize + nameAllocSize;
+    UBYTE *chunk = (UBYTE *) AllocMem(wholeAllocSize, MEMF_PUBLIC | MEMF_CLEAR);
+    if(!chunk) {
+      D(("MyCreateTask: AllocMem for chunk failed!\n"));
+      FreeMem(ml, mlAllocSize);
+    	return( NULL );
+    }
+    ml->ml_NumEntries = numChunks;
+    ml->ml_ME[0].me_Length = wholeAllocSize;
+    ml->ml_ME[0].me_Un.meu_Addr = (APTR)chunk;
+
     //newTask = (struct Task *) ml->ml_ME[ME_TASK].me_Addr;
     //newTask->tc_SPLower = (BYTE*)ml->ml_ME[ME_TASK].me_Addr + ((sizeof(struct Task) + 3) & 0xFFFFFFFC);
-    ml->ml_ME[ME_TASK].me_Addr = (APTR)((BYTE*)ml + ((sizeof(struct FakeMemList) + 3) & 0xFFFFFFFC));
-    newTask = (struct Task *) ml->ml_ME[ME_TASK].me_Addr;
-    newTask->tc_SPLower = (APTR)((BYTE*)newTask + ((sizeof(struct Task) + 3) & 0xFFFFFFFC));
-#else
-    /*
-     * This will allocate two chunks of memory: task of PUBLIC
-     * and stack of PRIVATE
-     */
-    struct FakeMemList fakememlist;
-    struct MemList *ml;
-    fakememlist = TaskMemTemplate;
-    fakememlist.fml_ME[ME_STACK].fme_Length = stackSize;
-
-    ml = (struct MemList *) AllocEntry( (struct MemList *)&fakememlist );
-
-    /* NOTE ! - AllocEntry returns with bit 31 set if it fails ! */
-    if( ((ULONG)ml) & 0x80000000 ) {
-      D(("MyCreateTask: AllocEntry failed!\n"));
-    	return( NULL );
-    }
-
-    /* set the stack accounting stuff */
-    newTask = (struct Task *) ml->ml_ME[ME_TASK].me_Addr;
-
-    newTask->tc_SPLower = ml->ml_ME[ME_STACK].me_Addr;
-#endif
-    newTask->tc_SPUpper = (APTR)(((ULONG)(newTask->tc_SPLower) + ((stackSize - 2) & 0xFFFFFFFC)) & 0xFFFFFFFE);
+    //ml->ml_ME[ME_TASK].me_Addr = (APTR)((BYTE*)ml + ((sizeof(struct FakeMemList) + 3) & 0xFFFFFFFC));
+    newTask = (struct Task *)chunk;
+    newTask->tc_SPLower = (APTR)(chunk + taskAllocSize);
+    char* nameInRAM = (char*)(chunk + taskAllocSize + stackSize);
+    mystrcpy(nameInRAM, name);
+    newTask->tc_SPUpper = (APTR)((UBYTE*)(newTask->tc_SPLower) + (((stackSize - 2) & 0xFFFFFFFC) & 0xFFFFFFFE));
     newTask->tc_SPReg = newTask->tc_SPUpper;
-    char* nameInRAM = (char*)((BYTE*)newTask->tc_SPUpper + ((stackSize + 3) & 0xFFFFFFFC));
-    strcpy(nameInRAM, name);
 
     /* misc task data structures */
     newTask->tc_Node.ln_Type = NT_TASK;
@@ -141,7 +104,7 @@ static struct Task * MyCreateTask(struct DevBase *base, void* taskUserData, cons
 
     /* add it to the tasks memory list */
     NewList( &newTask->tc_MemEntry );
-    AddHead( &newTask->tc_MemEntry, (struct Node*)ml );
+    AddHead( &newTask->tc_MemEntry, &ml->ml_Node );
 
     /* add the task to the system -- use the default final PC */
     AddTask( newTask, initPC, 0 );
@@ -160,7 +123,7 @@ static struct MsgPort* MyCreateMsgPort(struct DevBase *base) {
   }
   else
   {
-    //D(("CreateMsgPort: before AllocMem\n"));
+    D(("CreateMsgPort: SignalMask=%lx\n", (ULONG)(1<<signal)));
     mp = (struct MsgPort *)AllocMem(sizeof(*mp), MEMF_PUBLIC|MEMF_CLEAR);
     if(!mp) {
       D(("MyCreateMsgPort: NO MEMORY!\n"));
@@ -208,7 +171,7 @@ static SAVEDS ASM void worker_main(void)
   /* retrieve dev base stored in user data of task */
   struct InitData *id = worker_startup();
   struct DevBase *base = id->base;
-  D(("Task: id=%08lx base=%08lx base->sysBase=%08lx\n", id, base,  base->sysBase));
+  D(("Task: id=%08lx base=%08lx base->sysBase=%08lx\n", id, base, base->sysBase));
 
   /* create worker port */
   port = MyCreateMsgPort(base);
@@ -232,6 +195,7 @@ static SAVEDS ASM void worker_main(void)
   base->workerPort = port;
   D(("Task: signal task=%08lx mask=%08lx\n", id->initTask, id->initSigMask));
   Signal(id->initTask, id->initSigMask);
+  // after this line 'id' cannot be used any longer because it is freed in the caller (lies on its stack)
 
   /* only if port is available then enter work loop. otherwise quit task */
   if(port != NULL)
@@ -299,15 +263,7 @@ BOOL worker_start(struct DevBase *base)
   id.base = base;
   D(("Worker: init data %08lx\n", &id));
 
-  /* now launch worker task and inject dev base
-     make sure worker_main() does not run before base is set.
-  */
-  //Forbid();
   struct Task *myTask = MyCreateTask(base, &id, WorkerTaskName, 0, (const APTR)worker_main, 4096UL);
-  if(myTask != NULL) {
-    //myTask->tc_UserData = (APTR)&id;
-  }
-  //Permit();
   if(myTask == NULL) {
     D(("Worker: NO TASK!\n"));
     FreeSignal(signal);
