@@ -217,8 +217,8 @@ BOOL boot_init(struct DevBase *base)
       struct ExpansionRom *rom = &cd->cd_Rom;
       rom->er_Type = ERT_ZORROII | ERTF_DIAGVALID | 1; /* size=64 KiB */
       rom->er_Flags = ERFF_NOSHUTUP;
-      rom->er_Product = 42;
-      rom->er_Manufacturer = 2011; /* hack id */
+      rom->er_Product = 7; /* "romdisk by cnvogelg/nospam2000" */
+      rom->er_Manufacturer = 0xA1C; /* A1K ID from https://www.a1k.org/forum/index.php?threads/40276/page-2#post-1455861 */
       rom->er_SerialNumber = 1;
       rom->er_InitDiagVec = (UWORD)diag_off;
       rom->er_Reserved03 = 0;
